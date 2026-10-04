@@ -26,3 +26,6 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# dbt: perfil local com credenciais (copiar de dbt/profiles.yml.example)
+dbt/profiles.yml

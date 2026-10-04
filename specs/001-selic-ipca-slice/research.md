@@ -17,17 +17,22 @@ Decisões técnicas da fatia. Nenhum item ficou como NEEDS CLARIFICATION.
 
 ## R2. Paginação por janela
 
-- **Decision**: dividir `[start, end]` em janelas consecutivas de no máximo 10 anos menos 1 dia
-  (`[a, b]`, próxima começa em `b + 1 dia`), aplicada a **todas** as séries (inclusive mensais),
-  por simplicidade e uniformidade.
+- **Decision**: dividir `[start, end]` em janelas consecutivas de **5 anos** (`[a, b]`, próxima
+  começa em `b + 1 dia`; configurável, teto de 10 anos imposto pela API), aplicada a **todas** as
+  séries (inclusive mensais), por simplicidade e uniformidade.
+- Achado na implementação (2026-10-04): janelas de ~10 anos às vezes demoram ~30 s e voltam
+  **HTTP 200 com página HTML "Requisição inválida!"** (timeout do lado do servidor); a mesma
+  consulta repetida volta JSON normal. Janelas menores respondem em poucos segundos. Para séries
+  mensais, a API inclui o mês da data inicial mesmo que ela não seja dia 1.
 - **Rationale**: elimina buracos e sobreposição por construção; testável como função pura.
 - **Alternatives**: janela por série/periodicidade (mais regras sem ganho real; o volume é pequeno).
 
 ## R3. Cliente HTTP e retry
 
-- **Decision**: `httpx` (timeout 30 s) + `tenacity`: até 4 tentativas com backoff exponencial
-  (1 s, 2 s, 4 s) apenas para timeout, erro de conexão e HTTP 429/5xx. HTTP 4xx (ex.: 406) não é
-  repetido: é erro de requisição.
+- **Decision**: `httpx` (timeout 60 s) + `tenacity`: até 4 tentativas com backoff exponencial
+  (1 s, 2 s, 4 s) para timeout, erro de conexão, HTTP 429/5xx e **HTTP 200 com corpo não-JSON**
+  (página HTML de erro transitório, ver R2). HTTP 4xx (ex.: 406) e JSON com formato inesperado não
+  são repetidos: são erro de requisição/contrato.
 - **Rationale**: a API do BCB tem instabilidade ocasional; 4xx indica bug nosso.
 - **Alternatives**: `requests` + `urllib3.Retry` (funciona, mas `httpx` + `respx` torna os testes
   offline mais simples).

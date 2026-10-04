@@ -1,0 +1,44 @@
+[project]
+name = "brcredit"
+version = "0.1.0"
+description = "Plataforma de dados ponta a ponta com dados públicos do BCB e IBGE"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dbt-core>=1.12.5",
+    "dbt-postgres>=1.11.0",
+    "httpx>=0.28.1",
+    "matplotlib>=3.11.2",
+    "pandas>=3.0.6",
+    "psycopg[binary]>=3",
+    "pyarrow>=25.0.1",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2",
+    "tenacity>=9.1.4",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+brcredit = "brcredit.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["db: requires Postgres (TEST_DATABASE_URL)"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "respx>=0.23.1",
+    "ruff>=0.16.10",
+]
