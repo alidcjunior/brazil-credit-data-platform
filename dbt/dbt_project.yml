@@ -1,0 +1,23 @@
+name: brcredit
+version: "0.1.0"
+profile: brcredit
+
+model-paths: ["models"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+vars:
+  # Início do período de análise (alinhado ao SCR.data).
+  analysis_start: "2012-06-01"
+
+models:
+  brcredit:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      +materialized: table

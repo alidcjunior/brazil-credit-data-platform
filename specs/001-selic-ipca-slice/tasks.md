@@ -92,16 +92,16 @@ em zero linhas alteradas na segunda
 
 ### Tests for User Story 2 (MANDATORY) ⚠️
 
-- [ ] T021 [P] [US2] Write `tests/unit/test_silver_parse.py`: `dd/mm/aaaa` → date; `"14.50"` → Decimal; non-numeric value raises error naming `run_id`; for duplicate `(series_code, ref_date)` the row with greatest `extracted_at` wins
+- [X] T021 [P] [US2] Write `tests/unit/test_silver_parse.py`: `dd/mm/aaaa` → date; `"14.50"` → Decimal; non-numeric value raises error naming `run_id`; for duplicate `(series_code, ref_date)` the row with greatest `extracted_at` wins
 - [ ] T022 [P] [US2] 🐳 Write `tests/integration/test_silver_loader.py` (marker `db`): `init-db` runs twice without error; first load inserts all rows; second load reports 0 inserted/0 updated and leaves table identical including `loaded_at`; a newer capture with the same values (different `run_id`) causes 0 updates; a newer capture with a different value updates only that row
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement pure `parse_captures(df) -> DataFrame` and `dedupe_latest(df)` in `src/brcredit/silver/loader.py`
-- [ ] T024 [P] [US2] Write DDL in `src/brcredit/silver/schema.sql` per data-model (`silver.sgs_series`, `silver.sgs_observation` with PK and FK, `CREATE ... IF NOT EXISTS`)
-- [ ] T025 [US2] Implement `src/brcredit/db.py`: `get_engine(settings)` and `init_db(engine)` applying `silver/schema.sql` (package resource)
-- [ ] T026 [US2] Implement `load_silver(engine, data_dir)` in `src/brcredit/silver/loader.py`: upsert catalog into `sgs_series`; upsert observations via `INSERT ... ON CONFLICT (series_code, ref_date) DO UPDATE SET value, source_run_id, source_extracted_at, loaded_at = now() WHERE silver.sgs_observation.value IS DISTINCT FROM excluded.value`; return counts inserted/updated/unchanged
-- [ ] T027 [US2] Add `init-db` and `load-silver` commands to `src/brcredit/cli.py` printing the counts
+- [X] T023 [US2] Implement pure `parse_captures(df) -> DataFrame` and `dedupe_latest(df)` in `src/brcredit/silver/loader.py`
+- [X] T024 [P] [US2] Write DDL in `src/brcredit/silver/schema.sql` per data-model (`silver.sgs_series`, `silver.sgs_observation` with PK and FK, `CREATE ... IF NOT EXISTS`)
+- [X] T025 [US2] Implement `src/brcredit/db.py`: `get_engine(settings)` and `init_db(engine)` applying `silver/schema.sql` (package resource)
+- [X] T026 [US2] Implement `load_silver(engine, data_dir)` in `src/brcredit/silver/loader.py`: upsert catalog into `sgs_series`; upsert observations via `INSERT ... ON CONFLICT (series_code, ref_date) DO UPDATE SET value, source_run_id, source_extracted_at, loaded_at = now() WHERE silver.sgs_observation.value IS DISTINCT FROM excluded.value`; return counts inserted/updated/unchanged
+- [X] T027 [US2] Add `init-db` and `load-silver` commands to `src/brcredit/cli.py` printing the counts
 - [ ] T028 [US2] 🐳 `docker compose up -d --wait`, run `init-db` + `load-silver` twice on real bronze data and confirm second run reports 0 changes
 
 **Checkpoint**: US1 + US2 entregam ingestão completa até silver
@@ -118,19 +118,19 @@ de silver geram os valores calculados à mão, e com dados reais todos os testes
 
 ### Tests for User Story 3 (MANDATORY) ⚠️
 
-- [ ] T029 [P] [US3] Write `tests/unit/test_dbt_project.py`: `dbtRunner().invoke(["parse", ...])` on `dbt/` succeeds without DB: the test copies `dbt/profiles.yml.example` to `tmp_path/profiles.yml`, sets `POSTGRES_*` via `monkeypatch` and passes `--profiles-dir tmp_path`
+- [X] T029 [P] [US3] Write `tests/unit/test_dbt_project.py`: `dbtRunner().invoke(["parse", ...])` on `dbt/` succeeds without DB: the test copies `dbt/profiles.yml.example` to `tmp_path/profiles.yml`, sets `POSTGRES_*` via `monkeypatch` and passes `--profiles-dir tmp_path`
 - [ ] T030 [P] [US3] 🐳 Write `tests/integration/test_build_gold.py` (marker `db`): insert synthetic silver rows for 14 months, with the last month having Selic but no IPCA, run `dbt run`, assert the last month is absent, assert one row per month, `selic_target_avg`/`selic_target_eom` and `ipca_12m` equal hand-computed values; running twice gives identical table
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Create `dbt/dbt_project.yml` (profile `brcredit`; `staging` and `intermediate` as views with `+schema: staging`/`intermediate`; `marts` as table in default schema) and `dbt/profiles.yml.example` (target schema `gold`, connection from `env_var('POSTGRES_*')`)
-- [ ] T032 [P] [US3] Create `dbt/models/staging/_sources.yml` (source `silver.sgs_observation`) and `dbt/models/staging/stg_bcb_sgs__observations.sql` (`series_code`, `ref_date`, `value`)
-- [ ] T033 [P] [US3] Create `dbt/models/intermediate/int_selic_monthly.sql`: per month for series 432, `selic_target_avg` (avg) and `selic_target_eom` (value on max date of month)
-- [ ] T034 [P] [US3] Create `dbt/models/intermediate/int_ipca_monthly.sql`: per month for series 433, `ipca_mom` and `ipca_12m = (exp(sum(ln(1 + ipca_mom/100)) over 12 rows) - 1) * 100`, null when the window has fewer than 12 months
-- [ ] T035 [US3] Create `dbt/models/marts/fct_monthly_macro_indicators.sql` (inner join by month, `ref_month >= '2012-06-01'`) and `dbt/models/marts/_marts.yml` with column descriptions, `unique`/`not_null` tests and `accepted_range` per data-model
-- [ ] T036 [P] [US3] Create generic test `dbt/tests/generic/accepted_range.sql` (args `min_value`, `max_value`)
-- [ ] T037 [P] [US3] Create singular tests `dbt/tests/assert_no_month_gaps.sql`, `dbt/tests/assert_starts_jun_2012.sql`, `dbt/tests/assert_ipca_12m_official_values.sql` (dez/2015 10.67, dez/2017 2.95, dez/2021 10.06, tolerance 0.01)
-- [ ] T038 [US3] Add `build-gold` command to `src/brcredit/cli.py` invoking `dbtRunner` `build` with `--project-dir dbt --profiles-dir dbt`, loading `.env` first; exit ≠ 0 when any model or test fails
+- [X] T031 [US3] Create `dbt/dbt_project.yml` (profile `brcredit`; `staging` and `intermediate` as views with `+schema: staging`/`intermediate`; `marts` as table in default schema) and `dbt/profiles.yml.example` (target schema `gold`, connection from `env_var('POSTGRES_*')`)
+- [X] T032 [P] [US3] Create `dbt/models/staging/_sources.yml` (source `silver.sgs_observation`) and `dbt/models/staging/stg_bcb_sgs__observations.sql` (`series_code`, `ref_date`, `value`)
+- [X] T033 [P] [US3] Create `dbt/models/intermediate/int_selic_monthly.sql`: per month for series 432, `selic_target_avg` (avg) and `selic_target_eom` (value on max date of month)
+- [X] T034 [P] [US3] Create `dbt/models/intermediate/int_ipca_monthly.sql`: per month for series 433, `ipca_mom` and `ipca_12m = (exp(sum(ln(1 + ipca_mom/100)) over 12 rows) - 1) * 100`, null when the window has fewer than 12 months
+- [X] T035 [US3] Create `dbt/models/marts/fct_monthly_macro_indicators.sql` (inner join by month, `ref_month >= '2012-06-01'`) and `dbt/models/marts/_marts.yml` with column descriptions, `unique`/`not_null` tests and `accepted_range` per data-model
+- [X] T036 [P] [US3] Create generic test `dbt/tests/generic/accepted_range.sql` (args `min_value`, `max_value`)
+- [X] T037 [P] [US3] Create singular tests `dbt/tests/assert_no_month_gaps.sql`, `dbt/tests/assert_starts_jun_2012.sql`, `dbt/tests/assert_ipca_12m_official_values.sql` (dez/2015 10.67, dez/2017 2.95, dez/2021 10.06, tolerance 0.01)
+- [X] T038 [US3] Add `build-gold` command to `src/brcredit/cli.py` invoking `dbtRunner` `build` with `--project-dir dbt --profiles-dir dbt`, loading `.env` first; exit ≠ 0 when any model or test fails
 - [ ] T039 [US3] 🐳 Run `uv run brcredit build-gold` on real silver data and confirm all dbt tests pass
 
 **Checkpoint**: resposta analítica da fatia disponível em `gold.fct_monthly_macro_indicators`
@@ -147,12 +147,12 @@ vazio com os textos esperados
 
 ### Tests for User Story 4 (MANDATORY) ⚠️
 
-- [ ] T040 [P] [US4] Write `tests/unit/test_chart.py`: `render_chart(df, output)` creates a non-empty PNG; returned figure has title, legend labels "Meta Selic (% a.a.)" and "IPCA 12 meses (%)", and source note "Fonte: BCB/SGS (séries 432 e 433)"
+- [X] T040 [P] [US4] Write `tests/unit/test_chart.py`: `render_chart(df, output)` creates a non-empty PNG; returned figure has title, legend labels "Meta Selic (% a.a.)" and "IPCA 12 meses (%)", and source note "Fonte: BCB/SGS (séries 432 e 433)"
 
 ### Implementation for User Story 4
 
-- [ ] T041 [US4] Implement `src/brcredit/chart.py`: `read_gold(engine) -> DataFrame` and `render_chart(df, output)` (matplotlib `Agg`, both series on the same time axis, labeled axes, source note)
-- [ ] T042 [US4] Add `chart` command (`--output`, default `docs/img/selic_vs_ipca.png`) to `src/brcredit/cli.py`
+- [X] T041 [US4] Implement `src/brcredit/chart.py`: `read_gold(engine) -> DataFrame` and `render_chart(df, output)` (matplotlib `Agg`, both series on the same time axis, labeled axes, source note)
+- [X] T042 [US4] Add `chart` command (`--output`, default `docs/img/selic_vs_ipca.png`) to `src/brcredit/cli.py`
 - [ ] T043 [US4] 🐳 Generate `docs/img/selic_vs_ipca.png` from real gold data and check it visually
 
 **Checkpoint**: todas as user stories funcionando
@@ -161,9 +161,9 @@ vazio com os textos esperados
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T044 Add `run` command to `src/brcredit/cli.py` (`ingest sgs` → `init-db` → `load-silver` → `build-gold` → `chart`, stops on first failure) with `tests/unit/test_cli_run.py` asserting step order and early stop (steps mocked)
-- [ ] T045 [P] Write `docs/adr/0001-parquet-no-bronze.md` (context, decision: Parquet imutável por execução no bronze; alternatives: JSON cru, sobrescrever partição; consequences)
-- [ ] T046 [P] Write `docs/architecture.md` with Mermaid diagram (API SGS → bronze Parquet → silver Postgres → dbt staging/intermediate/marts → gráfico) and the role of each layer
+- [X] T044 Add `run` command to `src/brcredit/cli.py` (`ingest sgs` → `init-db` → `load-silver` → `build-gold` → `chart`, stops on first failure) with `tests/unit/test_cli_run.py` asserting step order and early stop (steps mocked)
+- [X] T045 [P] Write `docs/adr/0001-parquet-no-bronze.md` (context, decision: Parquet imutável por execução no bronze; alternatives: JSON cru, sobrescrever partição; consequences)
+- [X] T046 [P] Write `docs/architecture.md` with Mermaid diagram (API SGS → bronze Parquet → silver Postgres → dbt staging/intermediate/marts → gráfico) and the role of each layer
 - [ ] T047 Update `README.md`: como rodar (quickstart resumido), o que a Fatia 1 entrega, gráfico embutido, atribuição da fonte BCB, roadmap com Fatia 1 marcada e item "Airflow + dbt" renomeado para "Airflow" (dbt antecipado)
 - [ ] T048 Run `uv run ruff check .`, `uv run ruff format --check .` and `uv run pytest` (unit; integration too when 🐳 available); fix findings in files touched by this feature
 - [ ] T049 🐳 Validate `quickstart.md` from a clean clone: time to chart ≤ 15 min (SC-001), full `brcredit run` ≤ 5 min (SC-002), second `run` reports 0 silver changes (SC-005), unit tests < 1 min offline (SC-006)

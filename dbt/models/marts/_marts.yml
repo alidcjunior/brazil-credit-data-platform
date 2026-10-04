@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fct_monthly_macro_indicators
+    description: >
+      Indicadores macro mensais: meta Selic (média e fim do mês) e IPCA (mensal e acumulado em
+      12 meses). Fonte: BCB/SGS, séries 432 e 433.
+    columns:
+      - name: ref_month
+        description: Primeiro dia do mês de referência (grão da tabela).
+        data_tests:
+          - unique
+          - not_null
+      - name: selic_target_avg
+        description: Média da meta Selic diária no mês, em % a.a.
+        data_tests:
+          - not_null
+          - accepted_range:
+              min_value: 1.5
+              max_value: 30
+      - name: selic_target_eom
+        description: Meta Selic no último dia disponível do mês, em % a.a.
+        data_tests:
+          - not_null
+          - accepted_range:
+              min_value: 1.5
+              max_value: 30
+      - name: ipca_mom
+        description: IPCA do mês, em %.
+        data_tests:
+          - not_null
+          - accepted_range:
+              min_value: -2
+              max_value: 5
+      - name: ipca_12m
+        description: IPCA acumulado nos 12 meses até o mês (composto), em %.
+        data_tests:
+          - not_null
+          - accepted_range:
+              min_value: -5
+              max_value: 20

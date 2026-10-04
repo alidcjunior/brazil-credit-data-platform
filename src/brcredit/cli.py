@@ -2,14 +2,19 @@
 
 import logging
 from datetime import date, datetime
+from pathlib import Path
 from typing import Annotated
 
 import typer
+from sqlalchemy import Engine
+from sqlalchemy.exc import OperationalError
 
 from brcredit.bronze.writer import new_run_id, write_capture
 from brcredit.catalog import SERIES, get_series
 from brcredit.config import get_settings
 from brcredit.sources.bcb_sgs import SgsClient, SgsError
+
+DEFAULT_CHART_PATH = Path("docs/img/selic_vs_ipca.png")
 
 logger = logging.getLogger("brcredit")
 
@@ -91,3 +96,89 @@ def ingest_sgs(
     if failed:
         typer.echo(f"Falha na captura das séries: {', '.join(map(str, failed))}", err=True)
         raise typer.Exit(code=1)
+
+
+def _connected_engine() -> Engine:
+    from sqlalchemy import text
+
+    from brcredit.db import get_engine
+
+    settings = get_settings()
+    engine = get_engine(settings.database_url)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("select 1"))
+    except OperationalError:
+        typer.echo(
+            "Postgres não responde em DATABASE_URL. Suba o banco com: docker compose up -d --wait",
+            err=True,
+        )
+        raise typer.Exit(code=1) from None
+    return engine
+
+
+@app.command("init-db")
+def init_db_cmd() -> None:
+    """Cria schemas e tabelas do silver (idempotente)."""
+    from brcredit.db import init_db
+
+    init_db(_connected_engine())
+    typer.echo("Silver pronto: silver.sgs_series, silver.sgs_observation")
+
+
+@app.command("load-silver")
+def load_silver_cmd() -> None:
+    """Carrega todas as capturas do bronze no silver (upsert idempotente)."""
+    from brcredit.silver.loader import load_silver
+
+    result = load_silver(_connected_engine(), get_settings().data_dir)
+    typer.echo(
+        f"silver.sgs_observation: {result.inserted} inseridas, {result.updated} atualizadas, "
+        f"{result.unchanged} sem alteração"
+    )
+
+
+@app.command("build-gold")
+def build_gold_cmd() -> None:
+    """Roda `dbt build` (modelos + testes de dados) no projeto dbt/."""
+    from dbt.cli.main import dbtRunner
+    from dotenv import load_dotenv
+
+    load_dotenv()  # o profile do dbt lê POSTGRES_* do ambiente
+    project_dir = get_settings().dbt_project_dir
+    profiles = project_dir / "profiles.yml"
+    if not profiles.exists():
+        typer.echo(f"{profiles} não existe. Copie de {profiles}.example", err=True)
+        raise typer.Exit(code=1)
+    result = dbtRunner().invoke(
+        ["build", "--project-dir", str(project_dir), "--profiles-dir", str(project_dir)]
+    )
+    if not result.success:
+        typer.echo("dbt build falhou: veja os modelos/testes com erro acima", err=True)
+        raise typer.Exit(code=1)
+    typer.echo("Gold pronto: gold.fct_monthly_macro_indicators")
+
+
+@app.command("chart")
+def chart_cmd(
+    output: Annotated[Path, typer.Option(help="Arquivo PNG de saída.")] = DEFAULT_CHART_PATH,
+) -> None:
+    """Gera o gráfico Selic x IPCA 12 meses a partir do gold."""
+    from brcredit.chart import read_gold, render_chart
+
+    render_chart(read_gold(_connected_engine()), output)
+    typer.echo(f"Gráfico salvo em {output.as_posix()}")
+
+
+@app.command("run")
+def run_cmd(
+    serie: Annotated[list[int] | None, typer.Option(help="Código SGS (repetível).")] = None,
+    start: Annotated[datetime | None, typer.Option(formats=["%Y-%m-%d"])] = None,
+    end: Annotated[datetime | None, typer.Option(formats=["%Y-%m-%d"])] = None,
+) -> None:
+    """Fluxo completo: ingest sgs → init-db → load-silver → build-gold → chart."""
+    ingest_sgs(serie=serie, start=start, end=end)
+    init_db_cmd()
+    load_silver_cmd()
+    build_gold_cmd()
+    chart_cmd(output=DEFAULT_CHART_PATH)

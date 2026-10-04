@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit"
     data_dir: Path = Path("data")
+    dbt_project_dir: Path = Path("dbt")
 
 
 def get_settings() -> Settings:

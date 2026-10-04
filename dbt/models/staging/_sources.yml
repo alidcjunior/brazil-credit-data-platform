@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Séries limpas e tipadas, carregadas por `brcredit load-silver`.
+    schema: silver
+    tables:
+      - name: sgs_observation
+        description: Uma observação por série SGS e data (meta Selic 432, IPCA 433).
