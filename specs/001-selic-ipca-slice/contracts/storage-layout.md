@@ -6,7 +6,8 @@
 data/bronze/bcb_sgs/
 └── serie=<codigo>/
     └── run=<run_id>/            # uma execução de captura; nunca reescrita
-        └── part-000.parquet     # todas as janelas da série nesta execução
+        ├── part-000.parquet     # todas as janelas da série nesta execução
+        └── manifest.parquet     # uma linha por janela consultada (inclusive vazias)
 ```
 
 - `run_id` = `YYYYMMDDTHHMMSSZ-<4 hex>` (UTC), compartilhado por todas as séries da mesma execução.
@@ -27,5 +28,7 @@ data/bronze/bcb_sgs/
 
 - Python: `DATABASE_URL=postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit`
   (valor de `.env.example`, coincide com o `docker-compose.yml`).
+- Testes de integração: `TEST_DATABASE_URL=postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit_test`
+  (banco criado pelo script de init do compose; a fixture recusa banco cujo nome não termine em `_test`).
 - dbt: `dbt/profiles.yml.example` lê `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB` via `env_var()`; também definidos no `.env.example`.

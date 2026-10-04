@@ -17,6 +17,8 @@ em stderr. Logs em stderr; resumo final em stdout.
 - `--start` > `--end` ou `--end` no futuro → erro antes de qualquer requisição.
 - Série fora do catálogo → erro listando as séries válidas.
 - Falha de rede persistente após retries → saída ≠ 0, nenhuma execução parcial visível no bronze.
+- A captura é atômica **por série**: se a 432 termina e a 433 falha, a 432 fica gravada; a saída é
+  ≠ 0 e a mensagem lista a série que falhou.
 
 ## Exemplo de saída (`ingest sgs`)
 

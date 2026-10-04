@@ -37,7 +37,8 @@ Decisões técnicas da fatia. Nenhum item ficou como NEEDS CLARIFICATION.
 - **Decision**: Parquet via `pyarrow`, **um diretório por execução de captura** (`run_id`),
   gravado primeiro em diretório temporário e renomeado só quando todas as janelas da série
   terminam (captura parcial nunca fica visível). Colunas brutas `data` e `valor` como **string**,
-  sem conversão, mais metadados (série, janela, URL, timestamp, `run_id`).
+  sem conversão, mais metadados (série, janela, URL, timestamp, `run_id`), e um `manifest.parquet`
+  com uma linha por janela (URL, status, contagem, SHA-256 do corpo), inclusive janelas vazias.
 - **Rationale**: atende FR-003 (cópia fiel e imutável) e o edge case de falha no meio da captura.
 - **Alternatives**: guardar o JSON cru em arquivo `.json` (mais fiel, mas perde o formato colunar
   que a arquitetura define para o bronze); sobrescrever por partição de data (viola imutabilidade).
@@ -46,8 +47,9 @@ Decisões técnicas da fatia. Nenhum item ficou como NEEDS CLARIFICATION.
 
 - **Decision**: PostgreSQL 16, tabela `silver.sgs_observation` com PK `(series_code, ref_date)`.
   A carga lê **todas** as capturas do bronze, deduplica mantendo a de `extracted_at` mais recente
-  e faz `INSERT ... ON CONFLICT DO UPDATE ... WHERE` valor ou captura de origem mudaram
-  (`IS DISTINCT FROM`). `loaded_at` só muda quando a linha muda de fato.
+  e faz `INSERT ... ON CONFLICT DO UPDATE ... WHERE` o valor mudou (`IS DISTINCT FROM`).
+  `source_run_id` guarda a captura que estabeleceu o valor atual; recapturas com o mesmo valor
+  não alteram nada, e `loaded_at` só muda quando o valor muda.
 - **Rationale**: rodar duas vezes não altera nada (FR-006, SC-005); captura mais recente vence
   (FR-007).
 - **Alternatives**: truncate + insert (idempotente, mas perde a auditoria de quando cada valor
@@ -86,8 +88,9 @@ Decisões técnicas da fatia. Nenhum item ficou como NEEDS CLARIFICATION.
 - **Decision**:
   - `tests/unit/` — sem rede e sem banco: janelas, cliente (com `respx` servindo fixtures reais
     gravadas em `tests/fixtures/sgs/`), retry, escrita/leitura do bronze, parsing/deduplicação.
-  - `tests/integration/` — marcador `db`; precisam de Postgres em `DATABASE_URL`; são
-    **pulados automaticamente** se o banco não responde. Cobrem upsert, idempotência e
+  - `tests/integration/` — marcador `db`; usam **apenas** `TEST_DATABASE_URL` (banco
+    `brcredit_test`, nunca o banco de dados reais); são **pulados automaticamente** se ele não
+    estiver definido ou não responder. Cobrem upsert, idempotência e
     `build-gold` ponta a ponta (dbt build com testes).
 - **Rationale**: o Docker ainda não está instalado; a parte offline já é testável e roda no CI
   futuro sem serviços.

@@ -34,7 +34,8 @@ brutos para as duas séries cobrindo todo o período, cada um com seus metadados
 
 **Acceptance Scenarios**:
 
-1. **Given** nenhum dado capturado, **When** o operador pede a captura de jun/2012 até hoje,
+1. **Given** nenhum dado capturado, **When** o operador pede a captura de jun/2012 até hoje
+   (IPCA desde jun/2011, para o acumulado 12m),
    **Then** o sistema guarda as respostas brutas das duas séries cobrindo todo o período, mesmo
    que a fonte limite o tamanho de cada consulta.
 2. **Given** uma captura já feita, **When** o operador captura de novo o mesmo período, **Then** a
@@ -191,7 +192,8 @@ produzido, cobre todo o período e tem título, legenda, eixos rotulados e indic
   fatia de dashboard.
 - Cada execução recaptura o período pedido inteiro; carga incremental com janela de repescagem é
   a próxima fatia.
-- O ambiente local tem Docker disponível para o banco de dados; execução por CLI, sem
+- O banco roda em Docker Compose; o desenvolvimento pode começar sem Docker (captura e testes
+  offline), mas a fatia só é concluída depois de rodar com ele. Execução por CLI, sem
   orquestrador nesta fatia.
 - A API do SGS é pública e não exige autenticação.
 - Fora do escopo: CI, Airflow, dbt, SCR.data, IBGE, câmbio (série 1) e dashboard.

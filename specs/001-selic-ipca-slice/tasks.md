@@ -31,8 +31,8 @@ Implementation Strategy).
 
 - [ ] T001 Create `pyproject.toml` with uv (src layout, package `brcredit`, Python `>=3.13`, script entry `brcredit = "brcredit.cli:app"`), add runtime deps (httpx, tenacity, pyarrow, pandas, sqlalchemy>=2, psycopg[binary]>=3, typer, pydantic-settings, matplotlib, dbt-core, dbt-postgres) and dev deps (pytest, respx, ruff); generate `uv.lock`. If dbt-core has no release compatible with Python 3.13, pin the latest compatible one and record it in `specs/001-selic-ipca-slice/research.md` R6
 - [ ] T002 [P] Configure ruff (line-length 100, rules E,F,I,B,UP) and pytest (`testpaths = ["tests"]`, marker `db: requires Postgres`) in `pyproject.toml`
-- [ ] T003 [P] Create `.env.example` with `DATABASE_URL=postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit`, `DATA_DIR=./data`, `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, `POSTGRES_USER=brcredit`, `POSTGRES_PASSWORD=brcredit`, `POSTGRES_DB=brcredit`; add `dbt/profiles.yml` to `.gitignore`
-- [ ] T004 [P] Create `docker-compose.yml` with service `postgres` (`postgres:16-alpine`, env from `.env`, port 5432, named volume `pgdata`, healthcheck `pg_isready`)
+- [ ] T003 [P] Create `.env.example` with `DATABASE_URL=postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit`, `DATA_DIR=./data`, `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, `POSTGRES_USER=brcredit`, `POSTGRES_PASSWORD=brcredit`, `POSTGRES_DB=brcredit`, `TEST_DATABASE_URL=postgresql+psycopg://brcredit:brcredit@localhost:5432/brcredit_test`; add `dbt/profiles.yml` to `.gitignore`
+- [ ] T004 [P] Create `docker-compose.yml` with service `postgres` (`postgres:16-alpine`, env from `.env`, port 5432, named volume `pgdata`, healthcheck `pg_isready`) and init script `docker/postgres-init/01-test-db.sql` (mounted at `/docker-entrypoint-initdb.d`) creating database `brcredit_test`
 - [ ] T005 [P] Create package skeleton: `src/brcredit/__init__.py`, `src/brcredit/sources/__init__.py`, `src/brcredit/bronze/__init__.py`, `src/brcredit/silver/__init__.py`, `tests/unit/`, `tests/integration/`, `tests/fixtures/`
 
 ---
@@ -46,7 +46,7 @@ Implementation Strategy).
 - [ ] T006 Implement `Settings` (fields `database_url`, `data_dir: Path`, reading `.env`) in `src/brcredit/config.py` using pydantic-settings
 - [ ] T007 [P] Implement series catalog in `src/brcredit/catalog.py`: frozen dataclass `Series(code, name, unit, periodicity, default_start)` with 432 (Meta Selic, `% a.a.`, `daily`, 2012-06-01) and 433 (IPCA, `% no mês`, `monthly`, 2011-06-01); `get_series(code)` raises `ValueError` listing valid codes
 - [ ] T008 Create Typer app in `src/brcredit/cli.py` with sub-app `ingest` and logging to stderr; `uv run brcredit --help` must work
-- [ ] T009 [P] Create `tests/conftest.py`: `fixtures_dir` fixture; auto-skip tests marked `db` when `DATABASE_URL` cannot connect (1 s timeout); `db_engine` fixture that recreates schemas `silver`, `gold*` for an isolated run
+- [ ] T009 [P] Create `tests/conftest.py`: `fixtures_dir` fixture; tests marked `db` use ONLY `TEST_DATABASE_URL` and are auto-skipped when it is unset or cannot connect (1 s timeout); `db_engine` fixture refuses any database whose name does not end in `_test`, then recreates schemas `silver`, `gold*` for an isolated run
 - [ ] T010 [P] Write `tests/unit/test_catalog.py` covering both series and the invalid-code error
 
 **Checkpoint**: `uv run pytest` and `uv run ruff check .` pass; `uv run brcredit --help` works
@@ -66,16 +66,16 @@ brutas como string e metadados; uma segunda execução não altera a primeira
 
 - [ ] T011 [P] [US1] Record real API responses into `tests/fixtures/`: `sgs_432_2012-06-01_2012-07-31.json`, `sgs_433_2011-06-01_2012-12-01.json`, and the 406 body for a >10-year daily window as `sgs_432_406_window_too_large.json`; document URL and capture date in `tests/fixtures/README.md`
 - [ ] T012 [P] [US1] Write `tests/unit/test_bcb_sgs_windows.py`: windows cover `[start, end]` with no gap/overlap, each ≤ 10 years minus 1 day, short period yields one window, `start > end` raises
-- [ ] T013 [P] [US1] Write `tests/unit/test_bcb_sgs_client.py` (respx): URL uses `dd/mm/aaaa`; records returned unchanged as strings; empty list is valid; retries on timeout/503 then succeeds; does not retry on 406; raises after max attempts
-- [ ] T014 [P] [US1] Write `tests/unit/test_bronze_writer.py` (tmp_path): run directory and Parquet columns match data-model (`data`, `valor` as string + metadata); second run leaves first untouched; failure mid-write leaves only `.tmp-run=*`, which readers ignore; `read_captures` returns rows from all runs
+- [ ] T013 [P] [US1] Write `tests/unit/test_bcb_sgs_client.py` (respx): URL uses `dd/mm/aaaa`; records returned unchanged as strings; empty list is valid; retries on timeout/503 then succeeds; does not retry on 406; raises after max attempts; HTTP 200 with non-JSON body or JSON that is not a list of `{data, valor}` raises `SgsResponseError` with the URL and is not retried
+- [ ] T014 [P] [US1] Write `tests/unit/test_bronze_writer.py` (tmp_path): run directory and Parquet columns match data-model (`data`, `valor` as string + metadata); `manifest.parquet` has one row per window (including empty windows) with URL, status, row count and body SHA-256; second run leaves first untouched; failure mid-write leaves only `.tmp-run=*`, which readers ignore; `read_captures` returns rows from all runs
 - [ ] T015 [P] [US1] Write `tests/unit/test_cli_ingest.py` (Typer CliRunner, client mocked): `--start > --end` and future `--end` fail before any request; unknown `--serie` fails listing valid codes; success prints one summary line per series and exits 0
 
 ### Implementation for User Story 1
 
 - [ ] T016 [US1] Implement `split_windows(start, end, max_years=10)` in `src/brcredit/sources/bcb_sgs.py`
-- [ ] T017 [US1] Implement SGS client in `src/brcredit/sources/bcb_sgs.py`: `fetch_window(code, start, end)` with httpx (timeout 30 s) + tenacity (4 attempts, exponential backoff 1/2/4 s, retry only timeout/connection/429/5xx) and `fetch_series(code, start, end)` iterating windows, yielding `(window, records, request_url, extracted_at)`
-- [ ] T018 [US1] Implement `src/brcredit/bronze/writer.py`: `new_run_id()` (`YYYYMMDDTHHMMSSZ-<4hex>` UTC), `write_capture(data_dir, code, run_id, windows)` writing `serie=<c>/.tmp-run=<id>/part-000.parquet` then renaming to `run=<id>`, and `read_captures(data_dir, code)` reading all `run=*` directories
-- [ ] T019 [US1] Implement `brcredit ingest sgs` in `src/brcredit/cli.py` per `contracts/cli.md` (`--serie` repeatable, `--start`, `--end`, validation, one shared `run_id`, summary line per series)
+- [ ] T017 [US1] Implement SGS client in `src/brcredit/sources/bcb_sgs.py`: `fetch_window(code, start, end)` with httpx (timeout 30 s) + tenacity (4 attempts, exponential backoff 1/2/4 s, retry only timeout/connection/429/5xx) and `fetch_series(code, start, end)` iterating windows, yielding `(window, records, request_url, http_status, body_sha256, extracted_at)`
+- [ ] T018 [US1] Implement `src/brcredit/bronze/writer.py`: `new_run_id()` (`YYYYMMDDTHHMMSSZ-<4hex>` UTC), `write_capture(data_dir, code, run_id, windows)` writing `serie=<c>/.tmp-run=<id>/part-000.parquet` plus `manifest.parquet` (one row per window, per data-model) then renaming to `run=<id>`, and `read_captures(data_dir, code)` reading all `run=*` directories
+- [ ] T019 [US1] Implement `brcredit ingest sgs` in `src/brcredit/cli.py` per `contracts/cli.md` (`--serie` repeatable, `--start`, `--end`, validation, one shared `run_id`, summary line per series; atomic per series — on failure exit ≠ 0 naming the failed series)
 - [ ] T020 [US1] Run `uv run brcredit ingest sgs` against the real API and confirm both runs exist under `data/bronze/bcb_sgs/` covering 2012-06 (432) and 2011-06 (433) to today
 
 **Checkpoint**: US1 complete and tested offline — first demonstrable increment, no Docker needed
@@ -93,14 +93,14 @@ em zero linhas alteradas na segunda
 ### Tests for User Story 2 (MANDATORY) ⚠️
 
 - [ ] T021 [P] [US2] Write `tests/unit/test_silver_parse.py`: `dd/mm/aaaa` → date; `"14.50"` → Decimal; non-numeric value raises error naming `run_id`; for duplicate `(series_code, ref_date)` the row with greatest `extracted_at` wins
-- [ ] T022 [P] [US2] 🐳 Write `tests/integration/test_silver_loader.py` (marker `db`): `init-db` runs twice without error; first load inserts all rows; second load reports 0 inserted/0 updated and leaves table identical including `loaded_at`; a newer capture with a different value updates only that row
+- [ ] T022 [P] [US2] 🐳 Write `tests/integration/test_silver_loader.py` (marker `db`): `init-db` runs twice without error; first load inserts all rows; second load reports 0 inserted/0 updated and leaves table identical including `loaded_at`; a newer capture with the same values (different `run_id`) causes 0 updates; a newer capture with a different value updates only that row
 
 ### Implementation for User Story 2
 
 - [ ] T023 [US2] Implement pure `parse_captures(df) -> DataFrame` and `dedupe_latest(df)` in `src/brcredit/silver/loader.py`
 - [ ] T024 [P] [US2] Write DDL in `src/brcredit/silver/schema.sql` per data-model (`silver.sgs_series`, `silver.sgs_observation` with PK and FK, `CREATE ... IF NOT EXISTS`)
 - [ ] T025 [US2] Implement `src/brcredit/db.py`: `get_engine(settings)` and `init_db(engine)` applying `silver/schema.sql` (package resource)
-- [ ] T026 [US2] Implement `load_silver(engine, data_dir)` in `src/brcredit/silver/loader.py`: upsert catalog into `sgs_series`; upsert observations via `INSERT ... ON CONFLICT (series_code, ref_date) DO UPDATE ... WHERE value IS DISTINCT FROM excluded.value OR source_run_id IS DISTINCT FROM excluded.source_run_id`; return counts inserted/updated/unchanged
+- [ ] T026 [US2] Implement `load_silver(engine, data_dir)` in `src/brcredit/silver/loader.py`: upsert catalog into `sgs_series`; upsert observations via `INSERT ... ON CONFLICT (series_code, ref_date) DO UPDATE SET value, source_run_id, source_extracted_at, loaded_at = now() WHERE silver.sgs_observation.value IS DISTINCT FROM excluded.value`; return counts inserted/updated/unchanged
 - [ ] T027 [US2] Add `init-db` and `load-silver` commands to `src/brcredit/cli.py` printing the counts
 - [ ] T028 [US2] 🐳 `docker compose up -d --wait`, run `init-db` + `load-silver` twice on real bronze data and confirm second run reports 0 changes
 
@@ -118,8 +118,8 @@ de silver geram os valores calculados à mão, e com dados reais todos os testes
 
 ### Tests for User Story 3 (MANDATORY) ⚠️
 
-- [ ] T029 [P] [US3] Write `tests/unit/test_dbt_project.py`: `dbtRunner().invoke(["parse", ...])` on `dbt/` succeeds using `dbt/profiles.yml.example` values (no DB connection needed)
-- [ ] T030 [P] [US3] 🐳 Write `tests/integration/test_build_gold.py` (marker `db`): insert synthetic silver rows for 14 months, run `dbt run`, assert one row per month, `selic_target_avg`/`selic_target_eom` and `ipca_12m` equal hand-computed values; running twice gives identical table
+- [ ] T029 [P] [US3] Write `tests/unit/test_dbt_project.py`: `dbtRunner().invoke(["parse", ...])` on `dbt/` succeeds without DB: the test copies `dbt/profiles.yml.example` to `tmp_path/profiles.yml`, sets `POSTGRES_*` via `monkeypatch` and passes `--profiles-dir tmp_path`
+- [ ] T030 [P] [US3] 🐳 Write `tests/integration/test_build_gold.py` (marker `db`): insert synthetic silver rows for 14 months, with the last month having Selic but no IPCA, run `dbt run`, assert the last month is absent, assert one row per month, `selic_target_avg`/`selic_target_eom` and `ipca_12m` equal hand-computed values; running twice gives identical table
 
 ### Implementation for User Story 3
 

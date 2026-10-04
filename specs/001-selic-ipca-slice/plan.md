@@ -108,6 +108,7 @@ docs/
 
 data/                      # bronze local (gitignored)
 docker-compose.yml         # postgres:16-alpine + healthcheck + volume
+docker/postgres-init/      # 01-test-db.sql: cria o banco brcredit_test
 pyproject.toml             # deps, entry point `brcredit`, config ruff/pytest
 uv.lock
 .env.example

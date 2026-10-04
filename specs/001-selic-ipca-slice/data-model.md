@@ -26,6 +26,21 @@ Um arquivo por série por execução. Layout em [contracts/storage-layout.md](co
 
 Regras: nada é convertido; janela vazia gera zero linhas, não erro. Arquivos nunca são reescritos.
 
+## Bronze — manifesto da execução (`manifest.parquet`, ao lado do `part-000.parquet`)
+
+Uma linha por janela consultada, inclusive janelas vazias, para rastrear toda requisição.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `series_code` | int16 | código SGS |
+| `window_start` / `window_end` | date | janela consultada |
+| `request_url` | string | URL completa |
+| `http_status` | int16 | status HTTP final |
+| `row_count` | int32 | registros retornados |
+| `body_sha256` | string | hash do corpo bruto da resposta |
+| `extracted_at` | timestamp (UTC) | momento da resposta |
+| `run_id` | string | execução |
+
 ## Silver — `silver.sgs_series`
 
 | Coluna | Tipo | Regra |
@@ -46,11 +61,13 @@ Populada a partir do catálogo (upsert) a cada carga.
 | `value` | numeric(12,4) not null | parse de `valor`; não numérico → erro com `run_id` e arquivo |
 | `source_run_id` | text not null | captura de origem |
 | `source_extracted_at` | timestamptz not null | |
-| `loaded_at` | timestamptz not null | muda só quando a linha muda |
+| `loaded_at` | timestamptz not null | muda só quando o valor muda |
 
 - PK `(series_code, ref_date)`.
 - Dedupe: para a mesma chave em várias capturas, vence a de maior `extracted_at`.
-- Upsert: atualiza só se `value` ou `source_run_id` forem distintos (`IS DISTINCT FROM`).
+- Upsert: atualiza só se `value` for distinto (`IS DISTINCT FROM`). `source_run_id` e
+  `source_extracted_at` registram a captura que estabeleceu o valor atual; uma recaptura com o
+  mesmo valor não altera a linha.
 
 ## Gold — dbt (`dbt/models/`)
 
